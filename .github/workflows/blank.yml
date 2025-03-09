@@ -1,0 +1,81 @@
+name: Build OpenJDK 21 for Android
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout OpenJDK 21 Source
+        uses: actions/checkout@v4
+        with:
+          repository: 'openjdk/jdk21u'
+          ref: 'master'
+          submodules: true
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update && sudo apt install -y \
+            build-essential \
+            autoconf \
+            libx11-dev \
+            libxext-dev \
+            libxrender-dev \
+            libxtst-dev \
+            libxt-dev \
+            libasound2-dev \
+            libcups2-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxcomposite-dev \
+            libxdamage-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libavcodec-dev \
+            libavformat-dev \
+            libswscale-dev \
+            zip \
+            unzip \
+            wget \
+            curl
+
+      - name: Setup Android NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+          unzip android-ndk-r26b-linux.zip
+          echo "NDK_PATH=$(pwd)/android-ndk-r26b" >> $GITHUB_ENV
+
+      - name: Configure OpenJDK Build
+        run: |
+          export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+          export CC=aarch64-linux-android21-clang
+          export CXX=aarch64-linux-android21-clang++
+
+          bash configure \
+            --openjdk-target=aarch64-linux-android \
+            --disable-warnings-as-errors \
+            --enable-headless-only=yes \
+            --with-jvm-variants=server \
+            --with-debug-level=release \
+            --with-toolchain-type=gcc \
+            --with-boot-jdk=/usr/lib/jvm/java-17-openjdk-amd64
+
+      - name: Build OpenJDK 21
+        run: make images -j$(nproc)
+
+      - name: Upload Built JDK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openjdk-21-android
+          path: build/linux-aarch64-normal-server-release/images/jdk
